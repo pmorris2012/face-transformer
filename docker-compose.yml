@@ -1,0 +1,20 @@
+version: '2.3'
+
+services:
+  face_transformer:
+    image: face_transformer
+    container_name: face_transformer
+    working_dir: /face_transformer
+    build:
+      context: .
+    command: python3 -u test.py
+    volumes:
+      - ./:/face_transformer
+      - /media/quadserver2/data/paul/face/:/media
+    deploy:
+    resources:
+        reservations:
+        devices:
+        - driver: nvidia
+            count: 1
+            capabilities: [gpu, utility]
