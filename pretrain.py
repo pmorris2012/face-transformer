@@ -17,12 +17,13 @@ dataloader = cycle(DataLoader(
     dataset,
     batch_size=100,
     shuffle=True,
-    num_workers=16
+    num_workers=0
 ))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 model = FaceTransformer(68).to(device)
-model = torch.nn.DataParallel(model).to(device)
+#model = torch.nn.DataParallel(model).to(device)
 
 criterion_mask = torch.nn.MSELoss()
 criterion_nsp = torch.nn.CrossEntropyLoss()
@@ -40,7 +41,7 @@ for i in range(num_batches):
     for __ in range(accum_steps):
         arrays, special_mask, nsp_labels = next(dataloader)
         mask_labels = arrays[special_mask == SPECIAL_TOKENS['MASK']]
-        mask_preds, nsp_preds = model(arrays.to(device), mask_labels.to(device))
+        mask_preds, nsp_preds = model(arrays.to(device), special_mask.to(device))
         loss = criterion_mask(mask_preds.cpu(), mask_labels) + criterion_nsp(nsp_preds.cpu(), nsp_labels)
         batch_loss += loss.item()
         loss.backward()
@@ -51,6 +52,6 @@ for i in range(num_batches):
     optimizer.zero_grad()
 
     if i == 0 or (((i+1) % save_every) == 0):
-        torch.save(model.module.state_dict(), Path(save_dir, F"v2-{timestamp}-batch-{i+1}.ckpt"))
+        pass #torch.save(model.module.state_dict(), Path(save_dir, F"v2-{timestamp}-batch-{i+1}.ckpt"))
 
     print(F"batch {i}, loss {batch_loss}")

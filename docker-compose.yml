@@ -7,14 +7,14 @@ services:
     working_dir: /face_transformer
     build:
       context: .
-    command: python3 -u test.py
+    command: python3 pretrain.py
     volumes:
       - ./:/face_transformer
       - /media/quadserver2/data/paul/face/:/media
     deploy:
-    resources:
+      resources:
         reservations:
-        devices:
-        - driver: nvidia
-            count: 1
+          devices:
+          - driver: nvidia
+            count: 0
             capabilities: [gpu, utility]

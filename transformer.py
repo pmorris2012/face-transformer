@@ -71,14 +71,17 @@ class FaceTransformer(nn.Module):
         self.nsp_head = nn.Linear(self.hidden_size, 2)
 
     def forward(self, arrays, special_mask, pretrain=True):
-        arrays = torch.linalg.norm(arrays[..., None] - arrays, dim=-1, ord=2)
+        triu = torch.triu_indices(self.keypoints_size, self.keypoints_size, offset=1, device=arrays.device)
+        arrays = torch.linalg.norm(arrays[..., None, :] - arrays[..., None, :, :], dim=-1, ord=2)
+        arrays = arrays[:,:,triu[0],triu[1]]
+        
         mask = special_mask == self.special_tokens['MASK']
         arrays[mask] = 0
         
         array_embeddings = self.embedding(arrays)
         
         clear_mask = (special_mask == 0).to(torch.float)
-        array_embeddings = array_embeddings * clear_mask
+        array_embeddings = array_embeddings * clear_mask.unsqueeze(-1)
         
         idx_offset = min(self.special_tokens.values())
         special_add = torch.zeros_like(array_embeddings)

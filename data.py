@@ -56,13 +56,11 @@ class PretrainingDataset(Dataset):
 
     def _get_clips(self):
         clips = []
-        file_pattern = F"*{self.array_ext}"
         for line in self.clips_list.open("r"):
             clip_path = line.strip("\n")
             clip_path = Path(self.root_path, clip_path)
-            frames = list(clip_path.glob(file_pattern))
-            frames = self._sort_filenames(frames)
-            clips.append((clip_path, frames))
+            
+            clips.append(clip_path)
         return clips
 
     def __len__(self):
@@ -84,6 +82,8 @@ class PretrainingDataset(Dataset):
         end_idx = start_idx + self.sample_length * 2
         
         frame_idx = 0
+        while int(frames[frame_idx].stem) < start_idx:
+            frame_idx += 1
         samples = []
         for idx in range(start_idx, min(last_idx, end_idx)):
             frame = frames[frame_idx]
@@ -129,21 +129,30 @@ class PretrainingDataset(Dataset):
         found_idxs = torch.where(special_mask == 0)[0]
         mask = torch.rand(found_idxs.shape) < self.label_prob
         if not torch.any(mask):
-            mask[random.randint(0, found_idxs.shape-1)] = True
+            mask[random.randint(0, found_idxs.shape[0]-1)] = True
         special_mask[found_idxs[mask]] = SPECIAL_TOKENS['MASK']
         
         return arrays, special_mask
 
+    def _get_frames(self, path):
+        frames = list(path.glob(F"*{self.array_ext}"))
+        frames = self._sort_filenames(frames)
+        return frames
+
     def __getitem__(self, clip_index):
-        path, frames = self.clips[clip_index]
+        path = self.clips[clip_index]
+        frames = self._get_frames(path)
+
         samples = self._random_sample(path, frames)
         samples1, samples2 = self._split_samples(samples)
         
         nsp_label = 1
         if random.random() > 0.5:
             nsp_label = 0
-            rand_samples = self._random_sample(*random.choice(self.clips))
-            rand_samples1, rand_samples2 = self._split_samples(samples)
+            rand_path = random.choice(self.clips)
+            rand_frames = self._get_frames(rand_path)
+            rand_samples = self._random_sample(rand_path, rand_frames)
+            rand_samples1, rand_samples2 = self._split_samples(rand_samples)
             rand_sample = rand_samples1 if random.random() > 0.5 else rand_samples2
             samples2 = rand_sample
             
