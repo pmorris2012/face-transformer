@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from pathlib import Path
 import time
+from data import SPECIAL_TOKENS
 
 timestamp = str(int(time.time()))
 
@@ -37,9 +38,10 @@ for i in range(num_batches):
     model.train()
     batch_loss = 0
     for __ in range(accum_steps):
-        arrays, seq_idxs, seq_label_idxs, label_arrays = next(dataloader)
-        preds = model(arrays.to(device), seq_idxs.to(device), seq_label_idxs.to(device))
-        loss = criterion(preds.cpu(), label_arrays)
+        arrays, special_mask, nsp_labels = next(dataloader)
+        mask_labels = arrays[special_mask == SPECIAL_TOKENS['MASK']]
+        mask_preds, nsp_preds = model(arrays.to(device), mask_labels.to(device))
+        loss = criterion_mask(mask_preds.cpu(), mask_labels) + criterion_nsp(nsp_preds.cpu(), nsp_labels)
         batch_loss += loss.item()
         loss.backward()
 
