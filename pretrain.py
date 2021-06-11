@@ -7,30 +7,31 @@ import time
 
 timestamp = str(int(time.time()))
 
-root_dir = "/media/OMGEmotion/FaceKeypoints/"
+root_dir = "/media/AVSpeech/FaceKeypointsCPU2/"
+clips_list = "/media/AVSpeech/filter_clips.txt"
 save_dir = "/media/face-transformer/checkpoints/"
 
-dataset = PretrainingDataset(root_dir)
+dataset = PretrainingDataset(root_dir, clips_list)
 dataloader = cycle(DataLoader(
     dataset,
-    batch_size=350,
+    batch_size=100,
     shuffle=True,
-    num_workers=16,
-    collate_fn=collate_missing
+    num_workers=16
 ))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = FaceTransformer(2278).to(device)
-#model = torch.nn.DataParallel(model).to(device)
+model = FaceTransformer(68).to(device)
+model = torch.nn.DataParallel(model).to(device)
 
-criterion = torch.nn.MSELoss()
-num_batches = 100000
-accum_steps = 1
+criterion_mask = torch.nn.MSELoss()
+criterion_nsp = torch.nn.CrossEntropyLoss()
+num_batches = 50000
+accum_steps = 20
 save_every = 1000
-restart_every = 5000
-lr = 1e-6
+restart_every = 500
+lr = 1e-1
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98), eps=1e-9)
-sched = CosineWithRestarts(optimizer, T_max=restart_every+1)
+sched = CosineWithRestarts(optimizer, T_max=restart_every)
 
 for i in range(num_batches):
     model.train()
@@ -48,6 +49,6 @@ for i in range(num_batches):
     optimizer.zero_grad()
 
     if i == 0 or (((i+1) % save_every) == 0):
-        torch.save(model.state_dict(), Path(save_dir, F"prt-{timestamp}-batch-{i+1}.ckpt"))
+        torch.save(model.module.state_dict(), Path(save_dir, F"v2-{timestamp}-batch-{i+1}.ckpt"))
 
     print(F"batch {i}, loss {batch_loss}")
