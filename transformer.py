@@ -41,16 +41,17 @@ class PositionalEmbedding(nn.Module):
 class FaceTransformer(nn.Module):
     def __init__(
         self,
-        input_size,
+        keypoints_size,
         hidden_size=512,
         num_layers=8,
         num_heads=8,
         dropout=0.1,
-        max_seq_len=200,
+        max_seq_len=512,
         special_tokens=SPECIAL_TOKENS
     ):
         super().__init__()
-        self.input_size = input_size
+        self.keypoints_size = keypoints_size
+        self.input_size = int(np.arange(keypoints_size).sum())
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -66,28 +67,36 @@ class FaceTransformer(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layers, self.num_layers)
         self.norm = nn.LayerNorm(self.hidden_size)
 
-        self.pretrain_head = nn.Linear(self.hidden_size, self.input_size)
+        self.mask_head = nn.Linear(self.hidden_size, self.input_size)
+        self.nsp_head = nn.Linear(self.hidden_size, 2)
 
-    def forward(
-        self,
-        arrays,
-        seq_idxs,
-        seq_label_idxs=None
-    ):
+    def forward(self, arrays, special_mask, pretrain=True):
+        arrays = torch.linalg.norm(arrays[..., None] - arrays, dim=-1, ord=2)
+        mask = special_mask == self.special_tokens['MASK']
+        arrays[mask] = 0
+        
         array_embeddings = self.embedding(arrays)
-        all_embeddings = torch.cat([self.token_embedding, array_embeddings])
+        
+        clear_mask = (special_mask == 0).to(torch.float)
+        array_embeddings = array_embeddings * clear_mask
+        
         idx_offset = min(self.special_tokens.values())
-        embedded = all_embeddings[seq_idxs - idx_offset]
-        embedded = self.pos_embedding(embedded)
+        special_add = torch.zeros_like(array_embeddings)
+        idxs = torch.where(torch.logical_not(clear_mask))
+        special_add[idxs] = special_add[idxs] + self.token_embedding[special_mask[idxs] - idx_offset]
+        array_embeddings = array_embeddings + special_add
+        
+        embedded = self.pos_embedding(array_embeddings)
 
         encoded = self.encoder(embedded)
         encoded = self.norm(encoded)
 
-        if seq_label_idxs is None:
+        if not pretrain:
             return encoded
 
-        preds = self.pretrain_head(encoded[seq_label_idxs])
-        return preds
+        mask_preds = self.mask_head(encoded[mask])
+        nsp_preds = self.nsp_head(encoded[:,0])
+        return mask_preds, nsp_preds
         
 
 class CosineWithRestarts(torch.optim.lr_scheduler._LRScheduler):
