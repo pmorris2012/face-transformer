@@ -157,9 +157,14 @@ class PretrainingDataset(Dataset):
             samples2 = rand_sample
             
         samples = self._concat_samples(samples1, samples2)
-        arrays, special_mask = self._read_and_mask(samples)
+
         
-        return arrays, special_mask, nsp_label
+        try:
+            arrays, special_mask = self._read_and_mask(samples)
+            return arrays, special_mask, nsp_label
+        except Exception as e:
+            rand_replacement = random.randint(0, self.__len__()-1)
+            return self.__getitem__(rand_replacement)
 
     
 def DISFA_get_videos_tvt(root_dir, val=0.1, test=0.1):
